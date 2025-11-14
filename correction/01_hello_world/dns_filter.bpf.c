@@ -2,6 +2,7 @@
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/udp.h>
 #include <linux/pkt_cls.h>
 #include "bpf/bpf_helpers.h"

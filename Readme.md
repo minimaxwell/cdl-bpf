@@ -24,6 +24,7 @@ Open it in your favorite text editor, and add the basic skeleton :
 #include <linux/if_ether.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/udp.h>
 #include <linux/pkt_cls.h>
 #include "bpf/bpf_helpers.h"
@@ -84,7 +85,7 @@ To load our first program, we'll use the tc command to create a new filter,
 and attach our program to it.
 
 ```
-tc qdisc add dev <interface> handle 1: root clsact
+tc qdisc add dev <interface> handle 1: root cake
 tc filter add dev <interface> parent 1: bpf obj dns_filter.bpf.o sec tc
 ```
 
@@ -102,7 +103,7 @@ When you'll want to remove a loaded program, the easiest way is to remove the
 `clsact` qdisc entirely :
 
 ```
-sudo tc qdisc del dev <interface> clsact
+sudo tc qdisc del dev <interface> parent ffff:ffff
 ```
 
 # Identify IP frames
@@ -163,7 +164,7 @@ if (ethhdr.h_proto == __bpf_constant_htons(ETH_P_IP) {
 }
 ```
 
-The values in the `h_proto` field are called "Ethertyp", and are defined as part
+The values in the `h_proto` field are called "Ethertype", and are defined as part
 of ieee standard :
 
 https://standards-oui.ieee.org/ethertype/eth.txt
@@ -202,12 +203,12 @@ From that point on, we'll have to start managing the current offset for the
 various headers we are parsing. This is especially true because IPv4 and IPv6
 headers have a different length.
 
-Let's declare a `u32 offset` variable and store the offset of the next data to
+Let's declare a `unsgined int offset` variable and store the offset of the next data to
 parse in it :
 
 ```
-u32 offset = 0;
-u8 l4_proto;
+unsigned int offset = 0;
+char l4_proto;
 
 /* ... Ethernet header extraction ... */
 
@@ -225,7 +226,7 @@ if ( /* ipv4 */) {
     /* ... Load IPv6 header ... */
     offset += sizeof(ipv6hdr);
 
-    l4_proto = ipv6hdr.next_header;
+    l4_proto = ipv6hdr.nexthdr;
 } else {
     return TC_ACT_OK;
 }
@@ -238,13 +239,15 @@ if (l4_proto != IPPROTO_UDP)
 # Identify DNS datagrams
 
 DNS acts on port 53. Let's do the dance once again of loading the UDP header in
-the corresponding C structure `struct udphdr`, whose definition can be found here.
+the corresponding C structure `struct udphdr`, whose definition can be found [here](https://elixir.bootlin.com/linux/v6.17.7/source/include/uapi/linux/udp.h#L23)
 
 Add a check for port 53, keeping in mind that the port field is a 2 byte value
 in network endianness !
 
 _image _
 
+After passing everything that isn't port 53, don't forget to update our `offset`
+variable.
 
 # Identify DNS requests
 
