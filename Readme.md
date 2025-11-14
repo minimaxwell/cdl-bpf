@@ -84,7 +84,7 @@ To load our first program, we'll use the tc command to create a new filter,
 and attach our program to it.
 
 ```
-tc qdisc add dev <interface> handle 1: root cake
+tc qdisc add dev <interface> handle 1: root clsact
 tc filter add dev <interface> parent 1: bpf obj dns_filter.bpf.o sec tc
 ```
 
@@ -98,7 +98,12 @@ You should now see all your hello world when your machine sends traffic to the
 outside world ! What we will want to do next is identify, among all these packets,
 the ones that correspond to DNS requests towards unwanted domains, and drop them.
 
-TODO : tc cleanup
+When you'll want to remove a loaded program, the easiest way is to remove the
+`clsact` qdisc entirely :
+
+```
+sudo tc qdisc del dev <interface> clsact
+```
 
 # Identify IP frames
 
@@ -175,7 +180,7 @@ At that point, we either have an IPv4 packet, or an IPv6 one. Both of these
 can encapsulate UDP, which we're interested in as this is what conveys DNS
 requests.
 
-IPv4 and IPv6 are represented respectively by `struct iphdr` and `struct ip6hdr`.
+IPv4 and IPv6 are represented respectively by `struct iphdr` and `struct ipv6hdr`.
 
 In a similar fashion to the previous step, IPv4 headers have information about
 wether they encapsulate TCP, UDP or something else in the "proto" field. For IPv6,
@@ -193,22 +198,64 @@ if (ret)
     return TC_ACT_OK;
 ```
 
+From that point on, we'll have to start managing the current offset for the
+various headers we are parsing. This is especially true because IPv4 and IPv6
+headers have a different length.
+
+Let's declare a `u32 offset` variable and store the offset of the next data to
+parse in it :
+
+```
+u32 offset = 0;
+u8 l4_proto;
+
+/* ... Ethernet header extraction ... */
+
+offset += sizeof(ethhdr);
+
+/* ... IP header extraction ... */
+
+if ( /* ipv4 */) {
+    /* ... Load IPv4 header ... */
+    offset += sizeof(iphdr);
+
+    l4_proto = iphdr.protocol;
+
+} else if ( /* IPv6 */) {
+    /* ... Load IPv6 header ... */
+    offset += sizeof(ipv6hdr);
+
+    l4_proto = ipv6hdr.next_header;
+} else {
+    return TC_ACT_OK;
+}
+
+if (l4_proto != IPPROTO_UDP)
+    return TC_ACT_OK;
+```
+
 
 # Identify DNS datagrams
 
-DNS acts on port 53. Extract that field from the header, and let any traffic that
-doesn't have that destination port pass.
+DNS acts on port 53. Let's do the dance once again of loading the UDP header in
+the corresponding C structure `struct udphdr`, whose definition can be found here.
 
-Keep in mind that the port field is a 2 byte value in network endianness !
+Add a check for port 53, keeping in mind that the port field is a 2 byte value
+in network endianness !
 
 _image _
 
 
 # Identify DNS requests
 
+We have finally written a BPF program that only cares about DNS datagrams, but
+we're not done yet :) The DNS protocol supports numerous packet types, and we
+need to identify the relevant ones for filtering.
+
 A DNS query has the following header :
 
 ```
+/* __be16 means that the field is a 16-bits Big Endian value */
 struct dnshdr {
         __be16 trans_id;
         __be16 flags;
@@ -219,16 +266,272 @@ struct dnshdr {
 };
 ```
 
+What we now want is to identify "DNS Queries". This information is
+stored in the `flags` field, more specifically in the bit 0 of this 
+entry. The semantics of this bit :
+
+ - 0 if this is a DNS query
+ - 1 if this is a DNS response
+
+Return `TC_ACT_OK` for response.
+
 # Extract the DNS query
 
-The dns query has the following format :
+Finally, the interesting part ! We are now going to extract from the DNS
+payload the domain name stored in the request. This is what we are going to
+use to block queries to domains we don't want to hear from.
 
-([size][domain]) n times
+The dns domains are represented with a specific format, where each label in
+the domain is prefixed with a byte containing the number of characters in the
+label. Labels are stores one after the other, and the whole chain of labels is
+ended with a Null byte (`0x00`).
 
-aaaaaaaaaa
+For example, the domain :
+
+```
+www.example.com
+```
+
+is stored as :
+
+```
+[0x03,'w','w','w',0x07,'e','x','a','m','p','l','e',0x03,'c','o','m',0x00]
+```
+
+You can use the following function to parse the domain :
+
+```
+/** parse_query() - Parse a DNS query                                                 
+ * skb: The input skb                                                                 
+ * offset: The location of the first byte of the query in the skb                     
+ * query: output parameter, the query will be stored in dotted notation.              
+ * max_len: size of the query buffer                                                  
+ *                                                                                    
+ * Returns: The number of characters in the query, a negative number otherwise        
+ */                                                                                   
+int parse_query(struct __sk_buff *skb, unsigned int offset, char *query, int max_len) 
+{                                                                                     
+        unsigned int pos = 0;                                                         
+        int ret, i;                                                                   
+        char c;                                                                       
+                                                                                      
+        /* First byte is a label len, we skip it. */                                  
+        ret = bpf_skb_load_bytes(skb, offset, &c , 1);                                
+        if (ret)                                                                      
+                return TC_ACT_OK;                                                     
+                                                                                      
+        pos++;                                                                        
+                                                                                      
+        while (c != '\0') {                                                           
+                ret = bpf_skb_load_bytes(skb, offset + pos, &c , 1);                  
+                if (ret)                                                              
+                        return TC_ACT_OK;                                             
+                                                                                      
+                if ((c >= 'a' && c <= 'z') ||                                         
+                    (c >= 'A' && c <= 'Z') ||                                         
+                    (c >= '0' && c <= '9'))                                           
+                        query[pos] = c;                                               
+                else if (c != '\0')                                                   
+                        query[pos] = '.';                                             
+                pos++;                                                                
+                                                                                      
+                if (pos == max_len || c == '\0')                                      
+                        break;                                                        
+        }                                                                             
+                                                                                      
+        return pos;                                                                   
+}                                                                                     
+```
+
+Let's test that by printing the current query :
+
+```
+    char query[128] = {0};
+
+    /* ... */
+
+    ret = parse_query(skb, offs, query, 128);
+    if (ret < 0)
+        return TC_ACT_OK;
+
+    bpf_printk("%s", query);
+
+```
+
+To filter our queries, we simply need to compare this query with a list
+of denier queries. For that, we'll need a basic string comparison function.
+
+While there exist some helpers for this, they don't play well with the next
+steps where we will be using `maps`.
+
+Instead, let's use our own string comparison function :
+
+```
+static int __strncmp(const void *m1, const void *m2, unsigned int len)
+{                                                                     
+        const unsigned char *s1 = m1;                                 
+        const unsigned char *s2 = m2;                                 
+        int i, delta = 0;                                             
+                                                                      
+        for (i = 0; i < len; i++) {                                   
+                delta = s1[i] - s2[i];                                
+                if (delta || s1[i] == 0 || s2[i] == 0)                
+                        break;                                        
+        }                                                             
+        return delta;                                                 
+}                                                                     
+```
+
+Let's test it by filtering one single domain :
+
+```
+    const char deny = "www.google.fr";
+
+    /* ... */
+
+    if (!__strncmp(query, deny, sizeof(deny)))
+        return TC_ACT_SHOT;
+```
+
+Load your program, try to reach www.google.fr and see if this works :)
 
 # Introducing a denylist
 
+Blocking a single address is nice, but it would be nice to be able to store a
+list of domains to block. Even better, it that list could be provided by a userspace
+program, and consumed by our eBPF program without re-loading it.
+
+This is a perfect use-case for an eBPF map !
+
+Let's start simple by using a simple array map, storing a simple list of the
+rejected domains.
+
+To use a map in your program, you'll first need to declare, at the beginning of
+your program :
+
+```
+struct {
+        __uint(type, BPF_MAP_TYPE_ARRAY);
+        __uint(max_entries, 2);
+        __type(key, int);
+        __type(value, char[128]);
+} array SEC(".maps");
+```
+
+This map will be populated by userspace tools and accessed from our program.
+For now, we'll only focus on our program and fill the map with `bpftool`.
+
+When accessing a map from an eBPF program, it's necessary to use dedicated
+helpers. In our case, we'll use the `bpf_for_each_map_elem` helper that allows
+iterating over a map, by calling a callback function for each element :
+
+```
+long bpf_for_each_map_elem(struct bpf_map *map,
+                           void *callback_fn,
+                           void *callback_ctx,
+                           u64 flags)
+```
+
+The `callback_fn` function must have the following prototype :
+
+```
+long (*callback_fn)(struct bpf_map *map,
+                    const void *key,
+                    void *value,
+                    void *ctx);
+```
+
+This function gets executed for every single element in the map, each invocation
+being passed the `key` and `value` pointers. In our case, `key` is an `int`, and
+the `value` is a `char *`. The `ctx` parameters is an arbitrary pointer that will
+be passed to every call to our callback function, we will use it to store the
+DNS query, as well as wether or not a match was found.
+
+As we are going to pass several attributes in our `ctx` context pointer, let's
+create a custom struct to store these :
+
+```
+struct dns_filter_context {
+    const char *query;
+    int match;
+};
+```
+
+In our program's `dns_filter` function, instantiate an object of that type and
+fill it with the inital values :
+
+```
+struct dns_filter_context ctx = { .match = 0 };
+
+/* ... Parse the DNS query ... */
+
+ctx.query = query;
+```
+
+We can now implement our callback function for the map lookup :
+
+```
+static long dns_lookup(struct bpf_map *map, __u32 *key, void *value,
+                       void *context)
+{
+        struct dns_lookup_ctx *ctx = context;
+        char *dns_query = (char *)value;
+
+        /* Compare query with ctx->query, and set ctx->match to 1 if they are
+         * equal.
+         */
+
+        return 0;
+}
+```
+
+We now have all the required pieces to perform our lookup. In your program, add
+a call to `bpf_for_each_map_elem`, passing the `map` (in our case, it's named
+`array`), the callback function, the context, and the `flags` that must be 0 (no
+values other than 0 are supported as of today).
+
+Now to test it, we'll need to load our program, but also attach a map to it. As
+we haven't seen how to do that.
+
+```
+bpftool magic command with hex
+```
+
+Check that you are able to block the domain from the map :)
+
 # Create a dedicated tool
 
+We're almost there ! As you saw it's not very straightforward to populate maps
+from the commandline. We are now going to use `libbpf` to write a tool that will
+automatically :
+ - setup the `tc` Qdisc
+ - load the program
+ - attach the map
+ - populate the map
+
+It's simpler that it looks, thanks to `bpftool`'s ability to generate skeleton
+programs that implement most of that logic for us !
+
+As this is mostly boilerplate code, you will find under the `tool` folder a
+pre-populated skeleton named `dns_filter.c`. Copy it inside the `src` folder.
+
+You'll find inside the logic to load the program and setup `tc`. The map is
+automatically set when `bpf_tc_attach` is called.
+
+You need to fill-in the simple _TODO_ section, to add a domain to the map by
+calling `bpf_map_update_elem` as indicated by the comments.
+
+Compile your code by running `make`. This will recompile your eBPF program,
+store it as a byte array in `dns_filter_skel.h`, and re-compile the `dns_filter`
+userspace tool.
+
+Now, the only thing you need to do to load the program and set it up is to run:
+
+```
+./dns_filter
+```
+
+Congratulations for making it this far !
+
 # Going further
+
