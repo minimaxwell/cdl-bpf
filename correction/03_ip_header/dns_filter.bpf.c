@@ -53,6 +53,7 @@ int dns_filter(struct __sk_buff *skb)
 		offset += sizeof(ipv6hdr);
 	}
 
+	/* Pass everything that isn't UDP */
 	if (l4_proto != IPPROTO_UDP)
 		return TC_ACT_OK;
 

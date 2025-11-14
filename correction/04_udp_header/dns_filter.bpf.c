@@ -54,13 +54,16 @@ int dns_filter(struct __sk_buff *skb)
 		offset += sizeof(ipv6hdr);
 	}
 
+	/* Pass everything that isn't UDP */
 	if (l4_proto != IPPROTO_UDP)
 		return TC_ACT_OK;
 
+	/* Load UDP header */
 	ret = bpf_skb_load_bytes(skb, offset, &udphdr, sizeof(udphdr));
 	if (ret)
 		return TC_ACT_OK;
 
+	/* Pass anything that doesn't have destination port 53 (dns) */
 	if (udphdr.dest != __bpf_constant_htons(53))
 		return TC_ACT_OK;
 
