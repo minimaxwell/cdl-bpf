@@ -304,56 +304,58 @@ is stored as :
 You can use the following function to parse the domain :
 
 ```
-/** parse_query() - Parse a DNS query                                                 
- * skb: The input skb                                                                 
- * offset: The location of the first byte of the query in the skb                     
- * query: output parameter, the query will be stored in dotted notation.              
- * max_len: size of the query buffer                                                  
- *                                                                                    
- * Returns: The number of characters in the query, a negative number otherwise        
- */                                                                                   
-int parse_query(struct __sk_buff *skb, unsigned int offset, char *query, int max_len) 
-{                                                                                     
-        unsigned int pos = 0;                                                         
-        int ret, i;                                                                   
-        char c;                                                                       
-                                                                                      
-        /* First byte is a label len, we skip it. */                                  
-        ret = bpf_skb_load_bytes(skb, offset, &c , 1);                                
-        if (ret)                                                                      
-                return TC_ACT_OK;                                                     
-                                                                                      
-        pos++;                                                                        
-                                                                                      
-        while (c != '\0') {                                                           
-                ret = bpf_skb_load_bytes(skb, offset + pos, &c , 1);                  
-                if (ret)                                                              
-                        return TC_ACT_OK;                                             
-                                                                                      
-                if ((c >= 'a' && c <= 'z') ||                                         
-                    (c >= 'A' && c <= 'Z') ||                                         
-                    (c >= '0' && c <= '9'))                                           
-                        query[pos] = c;                                               
-                else if (c != '\0')                                                   
-                        query[pos] = '.';                                             
-                pos++;                                                                
-                                                                                      
-                if (pos == max_len || c == '\0')                                      
-                        break;                                                        
-        }                                                                             
-                                                                                      
-        return pos;                                                                   
-}                                                                                     
+/** parse_query() - Parse a DNS query
+ * skb: The input skb
+ * offset: The location of the first byte of the query in the skb
+ * query: output parameter, the query will be stored in dotted notation.
+ * max_len: size of the query buffer. DNS standard says max is 253.
+ *
+ * Returns: The number of characters in the query, a negative number otherwise
+ */
+static int parse_query(struct __sk_buff *skb, unsigned int offset, char *query, int max_len)
+{
+	unsigned int pos = 1;
+	int ret, i;
+	char c;
+
+	if (!skb || !query || max_len <= 0 || max_len > 253)
+		return -1;
+
+	/* First byte is a label len, we skip it. */
+	ret = bpf_skb_load_bytes(skb, offset, &c , 1);
+	if (ret)
+		return -1;
+
+	while (c != '\0') {
+		ret = bpf_skb_load_bytes(skb, offset + pos, &c , 1);
+		if (ret)
+			return -1;
+
+		if ((c >= 'a' && c <= 'z') ||
+		    (c >= 'A' && c <= 'Z') ||
+		    (c >= '0' && c <= '9'))
+			query[pos - 1] = c;
+		else if (c != '\0')
+			query[pos - 1] = '.';
+
+		pos++;
+
+		if (pos >= max_len || c == '\0')
+			break;
+	}
+
+	return pos;
+}
 ```
 
 Let's test that by printing the current query :
 
 ```
-    char query[128] = {0};
+    char query[253] = {0};
 
     /* ... */
 
-    ret = parse_query(skb, offs, query, 128);
+    ret = parse_query(skb, offs, query, 253);
     if (ret < 0)
         return TC_ACT_OK;
 
@@ -371,24 +373,24 @@ Instead, let's use our own string comparison function :
 
 ```
 static int __strncmp(const void *m1, const void *m2, unsigned int len)
-{                                                                     
-        const unsigned char *s1 = m1;                                 
-        const unsigned char *s2 = m2;                                 
-        int i, delta = 0;                                             
-                                                                      
-        for (i = 0; i < len; i++) {                                   
-                delta = s1[i] - s2[i];                                
-                if (delta || s1[i] == 0 || s2[i] == 0)                
-                        break;                                        
-        }                                                             
-        return delta;                                                 
-}                                                                     
+{
+        const unsigned char *s1 = m1;
+        const unsigned char *s2 = m2;
+        int i, delta = 0;
+
+        for (i = 0; i < len; i++) {
+                delta = s1[i] - s2[i];
+                if (delta || s1[i] == 0 || s2[i] == 0)
+                        break;
+        }
+        return delta;
+}
 ```
 
 Let's test it by filtering one single domain :
 
 ```
-    const char deny = "www.google.fr";
+    const char *deny = "www.google.com";
 
     /* ... */
 
