@@ -59,7 +59,7 @@ The main logging function in eBPF is `bpf_trace_printk`, but it's a bit cumberso
 to use as we have to declare the format string on the stack ahead of time :
 
 ```
-const char fmt[] = "Hello, world\n";
+const char fmt[] = "Hello, world";
 
 bpf_trace_printk(fmt, sizeof(fmt));
 ```
@@ -68,7 +68,7 @@ A wrapper macro named `bpf_printk` is provided by libbpf, which makes it more
 convenient to use. Insert the following line above the `return` statement:
 
 ```
-    bpf_printk("Hello, world !\n");
+    bpf_printk("Hello, world !");
 ```
 
 To compile our program, we'll use Clang from the LLVM tools :
