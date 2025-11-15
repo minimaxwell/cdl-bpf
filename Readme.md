@@ -85,8 +85,8 @@ To load our first program, we'll use the tc command to create a new filter,
 and attach our program to it.
 
 ```
-tc qdisc add dev <interface> handle 1: root cake
-tc filter add dev <interface> parent 1: bpf obj dns_filter.bpf.o sec tc
+tc qdisc add dev <interface> clsact
+tc filter add dev <interface> egress bpf direct-action object-file dns_filter.bpf.o sec tc
 ```
 
 Let's check the trace for our logs :
@@ -103,7 +103,7 @@ When you'll want to remove a loaded program, the easiest way is to remove the
 `clsact` qdisc entirely :
 
 ```
-sudo tc qdisc del dev <interface> parent ffff:ffff
+ tc qdisc del dev <interface> clsact
 ```
 
 # Identify IP frames
@@ -419,7 +419,7 @@ struct {
         __uint(type, BPF_MAP_TYPE_ARRAY);
         __uint(max_entries, 2);
         __type(key, int);
-        __type(value, char[128]);
+        __type(value, char[253]);
 } array SEC(".maps");
 ```
 
@@ -476,7 +476,7 @@ ctx.query = query;
 We can now implement our callback function for the map lookup :
 
 ```
-static long dns_lookup(struct bpf_map *map, __u32 *key, void *value,
+static long dns_lookup(void *map, __u32 *key, void *value,
                        void *context)
 {
         struct dns_lookup_ctx *ctx = context;
@@ -527,7 +527,7 @@ You need to fill-in the simple _TODO_ section, to add a domain to the map by
 calling `bpf_map_update_elem` as indicated by the comments.
 
 Compile your code by running `make`. This will recompile your eBPF program,
-store it as a byte array in `dns_filter_skel.h`, and re-compile the `dns_filter`
+store it as a byte array in `dns_filter.skel.h`, and re-compile the `dns_filter`
 userspace tool.
 
 Now, the only thing you need to do to load the program and set it up is to run:
