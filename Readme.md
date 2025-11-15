@@ -587,6 +587,3 @@ Now, the only thing you need to do to load the program and set it up is to run:
 ```
 
 Congratulations for making it this far !
-
-# Going further
-
