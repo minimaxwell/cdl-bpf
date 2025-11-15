@@ -45,8 +45,8 @@ reading log messages from running eBPF programs.
 
 go in the `src` folder, and let's start our journey by creating our program.
 
-A common practise is to name eBPF programs `<name>.bpf.c`, so name the program
-`dns-filter.bpf.c`.
+A common practice is to name eBPF programs `<name>.bpf.c`, so name the program
+`dns_filter.bpf.c`.
 
 Open it in your favorite text editor, and add the basic skeleton :
 
