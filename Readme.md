@@ -116,6 +116,8 @@ contains a field named `data`, that is a pointer to the beginning of the data we
 want to send over the network. Even if we may want to send this frame over a
 wireless network, our frame starts with an Ethernet Header :
 
+![ethetnet header](img/01_frame_eth.png)
+
 To fetch data from our `skb`, we'll use the bpf helper `bpf_skb_load_bytes` :
 
 ```
@@ -191,7 +193,7 @@ In a similar fashion to the previous step, IPv4 headers have information about
 wether they encapsulate TCP, UDP or something else in the "proto" field. For IPv6,
 this is stored in the "next header" field :
 
-_image todo_
+![IP header](img/02_frame_ip.png)
 
 To map the IPv4 or IPv6 headers, you need to skip the Ethernet header while
 loading the IP header :
@@ -249,7 +251,7 @@ the corresponding C structure `struct udphdr`, whose definition can be found [he
 Add a check for port 53, keeping in mind that the port field is a 2 byte value
 in network endianness !
 
-_image _
+![UDP header](img/03_udp.png)
 
 After passing everything that isn't port 53, don't forget to update our `offset`
 variable.
@@ -436,6 +438,8 @@ struct {
 
 This map will be populated by userspace tools and accessed from our program.
 For now, we'll only focus on our program and fill the map with `bpftool`.
+
+![Map](img/map.png)
 
 When accessing a map from an eBPF program, it's necessary to use dedicated
 helpers. In our case, we'll use the `bpf_for_each_map_elem` helper that allows
