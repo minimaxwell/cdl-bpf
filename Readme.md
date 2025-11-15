@@ -311,6 +311,11 @@ struct dnshdr {
 };
 ```
 
+Note that this header isn't part of the kernel headers, as DNS isn't a protocol
+natively supported by the Linux Kernel. DNS is handled in userspace, by tools
+such as `systemd-resolved`. You can re-use the above structure definition in your
+code.
+
 What we now want is to identify "DNS Queries". This information is
 stored in the `flags` field, more specifically in the bit 0 of this 
 entry. The semantics of this bit :
