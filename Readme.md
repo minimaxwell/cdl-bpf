@@ -2,7 +2,38 @@
 
 ## Requirements
 
+In order to be able to follow this workshop, you need a host machine
+running a reasonably recent Linux distribution. We suggest to use Ubuntu
+24.04. On top of that, you will need to install a few packages:
+- `build-essential` to get some basic tools
+- `clang` to be able to build eBPF programs
+- `libbpf-dev` to be able to use helpers in the eBPF part, and to be able
+  to write userspace parts
+- `bpftool` to be able to manipulate eBPF programs
+
 ## Using the provided Virtual Machine
+
+If you are not able to upgrade your machine to get a recent enough
+distribution and/or struggle to make the host tools work, you can use a
+virtual machine pre-configured with all the tooling needed for this
+training. This virtual machine is made to be used in [Virtual
+Box](https://www.virtualbox.org/). To import and run the Virtual Machine,
+executes the following steps:
+- install Virtual Box on your machine 
+- download the Virtual machine image: it is available thanks to the
+  following URL:
+  `https://f000.backblazeb2.com/file/bootlin-ebpf-workshop/bootlin-ebpf-workshop.ova`
+  This image weights a bit more than 5GB: if your bandwith does not allow
+  to download it in a reasonable time, you can ask your trainers for a USB
+  key containing the image.
+- Run Virtual Box: click on File -> Import Appliance. Select the .ova file
+  that you have downloaded/copied onto your machine. Click Next, then
+  Finish. Virtual Box will take a few tenths of seconds to import the
+  image
+- You will now have a "Bootlin eBPF workshop" available on the main screen.
+  Double-click on it to start it. You will reach a login screen on a Ubuntu
+  session. You can use "bootlin" as password.
+
 
 # Basic program
 
