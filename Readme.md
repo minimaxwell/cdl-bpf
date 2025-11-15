@@ -106,6 +106,8 @@ When you'll want to remove a loaded program, the easiest way is to remove the
  tc qdisc del dev <interface> clsact
 ```
 
+[Solution](correction/01_hello_world)
+
 # Identify IP frames
 
 The first step in our journey to identify DNS requests will be to first identify
@@ -175,6 +177,8 @@ here (link). For example, IPv4 packets are mapped to the `ETH_P_IP` macro.
 Update your program to pass any packet that isn't IPv4 or IPv6, as we are only
 going to consider these types.
 
+[Solution](correction/02_ethernet_header)
+
 # Identify UDP packets
 
 At that point, we either have an IPv4 packet, or an IPv6 one. Both of these
@@ -235,6 +239,7 @@ if (l4_proto != IPPROTO_UDP)
     return TC_ACT_OK;
 ```
 
+[Solution](correction/03_ip_header)
 
 # Identify DNS datagrams
 
@@ -248,6 +253,8 @@ _image _
 
 After passing everything that isn't port 53, don't forget to update our `offset`
 variable.
+
+[Solution](correction/04_udp_header)
 
 # Identify DNS requests
 
@@ -277,6 +284,8 @@ entry. The semantics of this bit :
  - 1 if this is a DNS response
 
 Return `TC_ACT_OK` for response.
+
+[Solution](correction/05_dns_header)
 
 # Extract the DNS query
 
@@ -400,6 +409,8 @@ Let's test it by filtering one single domain :
 
 Load your program, try to reach www.google.fr and see if this works :)
 
+[Solution](correction/06_dns_query)
+
 # Introducing a denylist
 
 Blocking a single address is nice, but it would be nice to be able to store a
@@ -503,6 +514,8 @@ bpftool map update name array key 0 0 0 0 value $(printf '%-253s' hello.com | tr
 ```
 
 Check that you are able to block the domain from the map :)
+
+[Solution](correction/07_dns_block)
 
 # Create a dedicated tool
 
