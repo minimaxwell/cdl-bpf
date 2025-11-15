@@ -439,7 +439,7 @@ static int __strncmp(const void *m1, const void *m2, unsigned int len)
 Let's test it by filtering one single domain :
 
 ```
-    const char *deny = "www.google.com";
+    const char deny[] = "www.google.com";
 
     /* ... */
 
