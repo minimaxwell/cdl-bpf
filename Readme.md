@@ -2,7 +2,7 @@
 
 ## Requirements
 
-## Using the orivded Vrirtual Machine
+## Using the provided Virtual Machine
 
 # Basic program
 
