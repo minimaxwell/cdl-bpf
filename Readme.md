@@ -499,7 +499,7 @@ Now to test it, we'll need to load our program, but also attach a map to it. As
 we haven't seen how to do that.
 
 ```
-bpftool magic command with hex
+bpftool map update name array key 0 0 0 0 value $(printf '%-253s' hello.com | tr ' ' '\0' | xxd -i -c 253| tr -d ,)
 ```
 
 Check that you are able to block the domain from the map :)
