@@ -204,8 +204,10 @@ of ieee standard :
 
 https://standards-oui.ieee.org/ethertype/eth.txt
 
-There are macros provided by the C library that wraps these, that you can find
-here (link). For example, IPv4 packets are mapped to the `ETH_P_IP` macro.
+There are macros provided by the C library that wraps these, that you can
+find
+[here](https://elixir.bootlin.com/linux/v6.17.8/source/include/uapi/linux/if_ether.h#L47).
+For example, IPv4 packets are mapped to the `ETH_P_IP` macro.
 
 Update your program to pass any packet that isn't IPv4 or IPv6, as we are only
 going to consider these types.
