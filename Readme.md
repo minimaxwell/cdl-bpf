@@ -76,11 +76,11 @@ stored in the final object file, we need it to be stored in the "tc" section.
 The `dns_filter` function is our program's entry point. This function will be
 executed every time we send a packet ! It takes as a parameter a `struct __sk_buff`
 object, that represents the content of our packet. The definition of the struct
-can be found here (link).
+can be found [here](https://elixir.bootlin.com/linux/v6.17.8/source/include/uapi/linux/bpf.h#L6288).
 
 If the function returns `TC_ACT_OK`, it means that we allow the packet to be sent.
 To drop a packet, we simply need to return `TC_ACT_SHOT` instead. There are more
-actions that can be returned, you can see the full list here (link).
+actions that can be returned, you can see the full list (here)[https://elixir.bootlin.com/linux/v6.17.8/source/include/uapi/linux/pkt_cls.h#L66].
 
 For now, we just want to make sure that we are able to compile and load an eBPF
 program and attach it to the TC hook. We however want know that our program is
