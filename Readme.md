@@ -242,7 +242,7 @@ From that point on, we'll have to start managing the current offset for the
 various headers we are parsing. This is especially true because IPv4 and IPv6
 headers have a different length.
 
-Let's declare a `unsgined int offset` variable and store the offset of the next data to
+Let's declare a `unsigned int offset` variable and store the offset of the next data to
 parse in it :
 
 ```
